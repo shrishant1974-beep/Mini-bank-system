@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mini Bank</title>
+  <link rel="stylesheet" href="bank.css" />
+</head>
+<body>
+  <div class="page-wrap">
+    <header class="header">
+      <div class="brand">
+        <div class="brand-icon">MB</div>
+        <div class="brand-title">
+          <h1>Mini Bank</h1>
+          <p>Secure savings, fast transfers, and a clean mini bank dashboard.</p>
+        </div>
+      </div>
+
+      <div class="nav-actions">
+        <button id="backBtn" class="btn-secondary">Back</button>
+        <button id="exitBtn" class="button">Exit Bank</button>
+      </div>
+    </header>
+
+    <div class="grid">
+      <section class="card" id="loginPanel">
+        <h2>Open or access your account</h2>
+        <p>Use the Mini Bank dashboard to create a new account or select an existing account.</p>
+
+        <div class="input-group">
+          <label class="label" for="accountName">Account holder name</label>
+          <input type="text" id="accountName" placeholder="Enter your full name" />
+        </div>
+
+        <div class="input-group">
+          <label class="label" for="accountType">Select account</label>
+          <select id="accountType">
+            <option value="Savings">Savings</option>
+            <option value="Current">Current</option>
+          </select>
+        </div>
+
+        <div class="actions-row">
+          <button id="createAccountBtn" class="button">Create New Account</button>
+        </div>
+
+        <p class="footer-note">This demo keeps your account data in your browser so you can continue your session later.</p>
+      </section>
+
+      <aside class="card account-card" id="summaryPanel">
+        <div>
+          <p class="label">Account ID</p>
+          <strong id="accountId">—</strong>
+        </div>
+        <div>
+          <p class="label">Account owner</p>
+          <strong id="ownerName">—</strong>
+        </div>
+        <div>
+          <p class="label">Account type</p>
+          <strong id="accountTypeDisplay">—</strong>
+        </div>
+        <div>
+          <p class="label">Available balance</p>
+          <strong id="accountBalance" class="account-balance">$0.00</strong>
+        </div>
+        <div>
+          <p class="label">Status</p>
+          <span class="tag success" id="accountStatus">Welcome</span>
+        </div>
+        <div>
+          <button id="newAccountBtn" class="btn-secondary">Create Another Account</button>
+        </div>
+      </aside>
+    </div>
+
+    <section class="grid">
+      <div class="card">
+        <h2>Bank actions</h2>
+        <p>Deposit or withdraw money using the Mini Bank online dashboard.</p>
+
+        <div class="actions-row">
+          <div class="input-group">
+            <label class="label" for="depositAmount">Deposit amount</label>
+            <input type="number" id="depositAmount" min="0" step="0.01" placeholder="100.00" />
+            <button id="depositBtn" class="button">Deposit</button>
+          </div>
+
+          <div class="input-group">
+            <label class="label" for="withdrawAmount">Withdraw amount</label>
+            <input type="number" id="withdrawAmount" min="0" step="0.01" placeholder="50.00" />
+            <button id="withdrawBtn" class="button">Withdraw</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Transaction history</h2>
+        <ul class="history-list" id="transactionList"></ul>
+        <p class="footer-note" id="historyEmpty">No transactions yet. Your first action will appear here.</p>
+      </div>
+    </section>
+
+    <div id="messageBox" class="message-box hidden"></div>
+  </div>
+
+  <script>
+    const loginPanel = document.getElementById('loginPanel');
+    const summaryPanel = document.getElementById('summaryPanel');
+    const messageBox = document.getElementById('messageBox');
+
+    const accountNameInput = document.getElementById('accountName');
+    const accountTypeSelect = document.getElementById('accountType');
+    const accountIdEl = document.getElementById('accountId');
+    const ownerNameEl = document.getElementById('ownerName');
+    const accountTypeDisplayEl = document.getElementById('accountTypeDisplay');
+    const accountBalanceEl = document.getElementById('accountBalance');
+    const accountStatusEl = document.getElementById('accountStatus');
+    const transactionList = document.getElementById('transactionList');
+    const historyEmpty = document.getElementById('historyEmpty');
+
+    const createAccountBtn = document.getElementById('createAccountBtn');
+    const newAccountBtn = document.getElementById('newAccountBtn');
+    const depositBtn = document.getElementById('depositBtn');
+    const withdrawBtn = document.getElementById('withdrawBtn');
+    const backBtn = document.getElementById('backBtn');
+    const exitBtn = document.getElementById('exitBtn');
+    const depositAmount = document.getElementById('depositAmount');
+    const withdrawAmount = document.getElementById('withdrawAmount');
+
+    const accountKey = 'miniBankAccount';
+    let account = null;
+
+    function formatCurrency(value) {
+      return new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: 'INR',
+        maximumFractionDigits: 2,
+      }).format(value);
+    }
+
+    function generateAccountId() {
+      const digits = Math.floor(100000 + Math.random() * 900000);
+      return `MB${digits}`;
+    }
+
+    function showMessage(text, type = 'info') {
+      messageBox.textContent = text;
+      messageBox.classList.remove('hidden', 'success', 'error');
+      if (type === 'error') {
+        messageBox.classList.add('error');
+      } else if (type === 'success') {
+        messageBox.classList.add('success');
+      }
+    }
+
+    function hideMessage() {
+      messageBox.classList.add('hidden');
+    }
+
+    function setStatus(text, success = true) {
+      accountStatusEl.textContent = text;
+      accountStatusEl.className = `tag ${success ? 'success' : 'danger'}`;
+    }
+
+    function saveAccount() {
+      localStorage.setItem(accountKey, JSON.stringify(account));
+    }
+
+    function updateSummary() {
+      if (!account) {
+        accountIdEl.textContent = '—';
+        ownerNameEl.textContent = '—';
+        accountBalanceEl.textContent = formatCurrency(0);
+        setStatus('No account', false);
+        historyEmpty.textContent = 'Create an account to see transactions.';
+        transactionList.innerHTML = '';
+        return;
+      }
+
+      accountIdEl.textContent = account.id;
+      ownerNameEl.textContent = account.name;
+      accountTypeDisplayEl.textContent = account.type || 'Savings';
+      accountBalanceEl.textContent = formatCurrency(account.balance);
+      setStatus('Account active', true);
+
+      transactionList.innerHTML = '';
+      if (!account.history.length) {
+        historyEmpty.textContent = 'No transactions yet. Your first action will appear here.';
+      } else {
+        historyEmpty.textContent = '';
+        account.history.slice().reverse().forEach(item => {
+          const row = document.createElement('li');
+          row.className = 'history-item';
+          row.innerHTML = `
+            <div>
+              <strong>${item.type}</strong>
+              <span class="history-time">${item.date}</span>
+            </div>
+            <div class="history-amount">${item.amount}</div>
+          `;
+          transactionList.appendChild(row);
+        });
+      }
+    }
+
+    function resetToLogin() {
+      account = null;
+      accountNameInput.value = '';
+      depositAmount.value = '';
+      withdrawAmount.value = '';
+      hideMessage();
+      updateSummary();
+    }
+
+    function showDashboard() {
+      loginPanel.classList.add('hidden');
+      summaryPanel.classList.remove('hidden');
+    }
+
+    function showLoginPanel() {
+      loginPanel.classList.remove('hidden');
+      summaryPanel.classList.add('hidden');
+    }
+
+    createAccountBtn.addEventListener('click', () => {
+      const name = accountNameInput.value.trim();
+      const type = accountTypeSelect.value || 'Savings';
+      if (!name) {
+        showMessage('Enter your name to create a new Mini Bank account.', 'error');
+        return;
+      }
+      account = {
+        id: generateAccountId(),
+        name,
+        type,
+        balance: 0,
+        history: [
+          { type: 'Account opened', amount: formatCurrency(0), date: new Date().toLocaleString() },
+        ],
+      };
+      saveAccount();
+      showDashboard();
+      updateSummary();
+      showMessage(`Welcome ${name}! Your ${type} account ${account.id} is ready.`, 'success');
+    });
+
+    newAccountBtn.addEventListener('click', () => {
+      accountNameInput.value = '';
+      depositAmount.value = '';
+      withdrawAmount.value = '';
+      hideMessage();
+      showLoginPanel();
+    });
+
+    depositBtn.addEventListener('click', () => {
+      if (!account) {
+        showMessage('Please create or load an account first.', 'error');
+        return;
+      }
+      const amount = parseFloat(depositAmount.value);
+      if (Number.isNaN(amount) || amount <= 0) {
+        showMessage('Enter a valid deposit amount greater than zero.', 'error');
+        return;
+      }
+      account.balance += amount;
+      account.history.push({
+        type: 'Deposit',
+        amount: `+ ${formatCurrency(amount)}`,
+        date: new Date().toLocaleString(),
+      });
+      depositAmount.value = '';
+      saveAccount();
+      updateSummary();
+      showMessage(`₹${amount.toFixed(2)} deposited successfully.`, 'success');
+    });
+
+    withdrawBtn.addEventListener('click', () => {
+      if (!account) {
+        showMessage('Please create or load an account first.', 'error');
+        return;
+      }
+      const amount = parseFloat(withdrawAmount.value);
+      if (Number.isNaN(amount) || amount <= 0) {
+        showMessage('Enter a valid withdrawal amount greater than zero.', 'error');
+        return;
+      }
+      if (amount > account.balance) {
+        showMessage('Insufficient balance for this withdrawal.', 'error');
+        return;
+      }
+      account.balance -= amount;
+      account.history.push({
+        type: 'Withdrawal',
+        amount: `- ${formatCurrency(amount)}`,
+        date: new Date().toLocaleString(),
+      });
+      withdrawAmount.value = '';
+      saveAccount();
+      updateSummary();
+      showMessage(`₹${amount.toFixed(2)} withdrawn successfully.`, 'success');
+    });
+
+    backBtn.addEventListener('click', () => {
+      showLoginPanel();
+      hideMessage();
+    });
+
+    exitBtn.addEventListener('click', () => {
+      resetToLogin();
+      showLoginPanel();
+      showMessage('You have exited Mini Bank. Create or load an account to continue.', 'info');
+    });
+
+    if (account) {
+      showDashboard();
+    } else {
+      showLoginPanel();
+    }
+    updateSummary();
+  </script>
+</body>
+</html>
